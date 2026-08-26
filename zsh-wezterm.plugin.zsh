@@ -39,17 +39,22 @@ wezterm_is_wezterm() {
 # space in it, and on macOS that includes "Application Support", produces a
 # malformed URI and the new split silently lands somewhere else.
 #
-# Encoding is byte-wise under LC_ALL=C so multibyte characters become one
-# escape per UTF-8 byte, which is what RFC 3986 asks for. The fast path
-# returns untouched for the overwhelmingly common all-unreserved case, since
-# this runs on every directory change.
+# Encoding is byte-wise so multibyte characters become one escape per UTF-8
+# byte, which is what RFC 3986 asks for. The fast path returns untouched for
+# the overwhelmingly common all-unreserved case, since this runs on every
+# directory change.
+#
+# no_multibyte rather than LC_ALL=C: assigning the locale does not reliably
+# flip zsh into byte semantics for a string it has already parsed, and the
+# result then differs between a UTF-8 and a C locale. no_multibyte is the
+# explicit switch and gives identical output under any locale.
 wezterm_urlencode() {
   local str=$1 out='' i
   if [[ $str != *[^a-zA-Z0-9/._~-]* ]]; then
     print -rn -- $str
     return
   fi
-  local LC_ALL=C
+  setopt localoptions no_multibyte
   for (( i = 1; i <= ${#str}; i++ )); do
     case $str[i] in
       ([a-zA-Z0-9/._~-]) out+=$str[i] ;;
