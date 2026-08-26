@@ -26,9 +26,19 @@ Describe 'zsh-wezterm.plugin.zsh'
     End
 
     # RFC 3986 wants one escape per byte, not per character.
+    #
+    # $'...' rather than "$(printf '\xc3\xa9')": the command substitution is
+    # resolved by whichever printf the runner provides, and on Ubuntu it
+    # produced two spaces instead of the two bytes, so this passed on macOS and
+    # failed in CI. The zsh literal has no such ambiguity.
     It 'encodes a multibyte character as its UTF-8 bytes'
-      When call wezterm_urlencode "/Users/x/caf$(printf '\xc3\xa9')"
+      When call wezterm_urlencode $'/Users/x/caf\xc3\xa9'
       The output should equal '/Users/x/caf%C3%A9'
+    End
+
+    It 'encodes a 3-byte character as three escapes'
+      When call wezterm_urlencode $'/x/\xe2\x9c\x93'
+      The output should equal '/x/%E2%9C%93'
     End
 
     It 'handles an empty string'
