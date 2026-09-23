@@ -38,10 +38,9 @@ terminal session, not a test failure a user can shrug off.
 - Requests for more comments or rationale — this file already over-documents
   its own edge cases (see its header block and the README's "Notes on the
   fiddly bits"); it doesn't need more of that.
-- `.github/workflows/*.yml` in a PR titled like
-  `chore(ci): sync caller templates from seankoji-com/.github` — these are
-  synced centrally from the org `.github` repo, not organic changes to
-  litigate here.
+- Unchanged `call-reusable-*.yml` template content can be checked against
+  the central source. Review local workflow changes, including caller
+  triggers, permissions, runner choices, and pinned revisions.
 - Whether shellspec passes — `shellspec.yml` runs the full suite on every
   push/PR already. Don't restate what a red check will already say; point at
   what's untested instead.
