@@ -203,4 +203,23 @@ Describe 'zsh-wezterm.plugin.zsh'
       The output should equal '[]'
     End
   End
+  Describe 'safe repeated registration'
+    It 'keeps exactly one copy of each hook when sourced twice'
+      run_it() {
+        precmd_functions=(existing)
+        preexec_functions=()
+        chpwd_functions=()
+        zsh_wezterm_register
+        zsh_wezterm_register
+        print -r -- "${precmd_functions[*]}"
+        print -r -- "${preexec_functions[*]}"
+        print -r -- "${chpwd_functions[*]}"
+      }
+      When call run_it
+      The line 1 of output should equal '_wezterm_osc133_precmd existing'
+      The line 2 of output should equal '_wezterm_osc133_preexec'
+      The line 3 of output should equal '_wezterm_osc7 _wezterm_repo_name_hook'
+    End
+  End
+
 End
