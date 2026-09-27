@@ -32,15 +32,18 @@ terminal session, not a test failure a user can shrug off.
   site that skips these sprays control sequences or base64 into terminals
   that don't understand them.
 
+- Review local workflow changes, including reusable caller triggers,
+  permissions, runner choices, and pinned revisions.
+
 ## Do not spend attention here
+
+- Unchanged reusable workflow template content can be checked against its
+  central source; review any local changes.
 
 - README.md / LICENSE wording and formatting — docs only, no runtime behavior.
 - Requests for more comments or rationale — this file already over-documents
   its own edge cases (see its header block and the README's "Notes on the
   fiddly bits"); it doesn't need more of that.
-- Unchanged `call-reusable-*.yml` template content can be checked against
-  the central source. Review local workflow changes, including caller
-  triggers, permissions, runner choices, and pinned revisions.
 - Whether shellspec passes — `shellspec.yml` runs the full suite on every
   push/PR already. Don't restate what a red check will already say; point at
   what's untested instead.
