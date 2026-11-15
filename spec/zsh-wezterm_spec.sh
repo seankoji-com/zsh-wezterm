@@ -165,12 +165,8 @@ Describe 'zsh-wezterm.plugin.zsh'
     }
 
     It 'encodes exactly 256 bytes without external commands'
-      run_it() {
-        local expected=$'\e]1337;SetUserVar=cutoff='${(l:340::YWFh:)}'YQ=='$'\a'
-        [[ "$(capture_osc emit_cutoff_value)" == "$expected" ]]
-      }
-      When call run_it
-      The status should be success
+      When call capture_osc emit_cutoff_value
+      The output should equal $'\e]1337;SetUserVar=cutoff='${(l:340::YWFh:)}'YQ=='$'\a'
     End
 
     emit_large_value() {
