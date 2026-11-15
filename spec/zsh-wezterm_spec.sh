@@ -98,19 +98,23 @@ Describe 'zsh-wezterm.plugin.zsh'
       return 1
     }
 
-    # A pseudo-terminal exercises the emission path rather than the pipe guard.
-    # Close PATH in the child so an external encoder cannot satisfy the test.
+    # Start a fresh shell in the PTY: ShellSpec's call context suppresses
+    # err_exit even inside functions which enable it. Close PATH after startup
+    # so an external encoder cannot satisfy the test.
     emit_values() {
-      path=()
-      LC_ALL=C.UTF-8
-      TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
-      setopt ksh_arrays err_exit
-      wezterm_set_user_var empty ''
-      wezterm_set_user_var one f
-      wezterm_set_user_var two fo
-      wezterm_set_user_var three foo
-      wezterm_set_user_var bytes $'\x00\xff\x5c\x5e\n\xc3\xa9'
-      print -rn -- 'END-OF-OSC'
+      "$SHELLSPEC_SHELL" -f -c '
+        source ./zsh-wezterm.plugin.zsh
+        path=()
+        LC_ALL=C.UTF-8
+        TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE="" WEZTERM_PANE=""
+        setopt ksh_arrays err_exit
+        wezterm_set_user_var empty ""
+        wezterm_set_user_var one f
+        wezterm_set_user_var two fo
+        wezterm_set_user_var three foo
+        wezterm_set_user_var bytes $'"'"'\x00\xff\x5c\x5e\n\xc3\xa9'"'"'
+        print -rn -- END-OF-OSC
+      '
     }
 
     capture_values() {
