@@ -102,7 +102,7 @@ Describe 'zsh-wezterm.plugin.zsh'
     # err_exit even inside functions which enable it. Close PATH after startup
     # so an external encoder cannot satisfy the test.
     emit_values() {
-      zsh -f -c '
+      "$SHELLSPEC_SHELL" -f -c '
         source ./zsh-wezterm.plugin.zsh
         path=()
         LC_ALL=C.UTF-8
