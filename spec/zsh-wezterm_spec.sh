@@ -78,8 +78,14 @@ Describe 'zsh-wezterm.plugin.zsh'
       zpty -b osc "$1"
       fd=$REPLY
       while (( EPOCHREALTIME < deadline )); do
-        if zselect -t 10 -r "$fd" && zpty -r -t osc chunk; then
-          output+=$chunk
+        if zselect -t 10 -r "$fd"; then
+          if zpty -r -t osc chunk; then
+            output+=$chunk
+          elif (( $? == 2 )); then
+            zpty -d osc
+            print -u2 -r -- 'OSC child exited before marker'
+            return 1
+          fi
           if [[ $output == *END-OF-OSC* ]]; then
             zpty -d osc
             print -rn -- "${output%END-OF-OSC*}"
@@ -110,6 +116,33 @@ Describe 'zsh-wezterm.plugin.zsh'
     capture_values() {
       capture_osc emit_values
     }
+
+    emit_without_marker() { print -rn -- 'partial'; }
+    emit_without_exiting() { sleep 10; }
+
+    It 'fails promptly when the child exits before the marker'
+      run_it() {
+        zmodload zsh/datetime
+        local -F start=$EPOCHREALTIME
+        capture_osc emit_without_marker && return 1
+        (( EPOCHREALTIME - start < 3 ))
+      }
+      When call run_it
+      The status should be success
+      The stderr should equal 'OSC child exited before marker'
+    End
+
+    It 'times out when the child remains running without the marker'
+      run_it() {
+        zmodload zsh/datetime
+        local -F start=$EPOCHREALTIME
+        capture_osc emit_without_exiting && return 1
+        (( EPOCHREALTIME - start >= 4 && EPOCHREALTIME - start < 8 ))
+      }
+      When call run_it
+      The status should be success
+      The stderr should equal 'timed out waiting for OSC output'
+    End
 
     It 'emits exact base64 for arbitrary bytes without external commands'
       When call capture_values
