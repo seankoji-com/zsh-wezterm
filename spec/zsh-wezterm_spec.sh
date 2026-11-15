@@ -247,15 +247,11 @@ Describe 'zsh-wezterm.plugin.zsh'
       print -rn -- "status=$? END-OF-OSC"
     }
 
-    capture_other_terminal() {
-      local output
-      output=$(capture_osc emit_other_terminal) || return
-      print -rn -- "${output% }"
-    }
-
     It 'declines successfully in another terminal even when stdout is a terminal'
-      When call capture_other_terminal
-      The output should equal 'status=0'
+      run_it() { setopt localoptions pipefail; capture_osc emit_other_terminal | osc_hex; }
+      When call run_it
+      The status should be success
+      The output should equal "$(print -rn -- 'status=0 ' | osc_hex)"
     End
 
     # OSC 1337 SetUserVar is an iTerm2/WezTerm extension. Emitting it blind
