@@ -68,6 +68,106 @@ Describe 'zsh-wezterm.plugin.zsh'
   End
 
   Describe 'wezterm_set_user_var'
+    # Read without a pattern so a broken emitter cannot block the test forever.
+    capture_osc() {
+      zmodload zsh/zpty
+      zmodload zsh/zselect
+      zmodload zsh/datetime
+      local output='' chunk fd
+      local -F deadline=$(( EPOCHREALTIME + 5 ))
+      zpty -b osc "$1"
+      fd=$REPLY
+      while (( EPOCHREALTIME < deadline )); do
+        if zselect -t 10 -r "$fd" && zpty -r -t osc chunk; then
+          output+=$chunk
+          if [[ $output == *END-OF-OSC* ]]; then
+            zpty -d osc
+            print -rn -- "${output%END-OF-OSC*}"
+            return 0
+          fi
+        fi
+      done
+      zpty -d osc
+      print -u2 -r -- 'timed out waiting for OSC output'
+      return 1
+    }
+
+    # A pseudo-terminal exercises the emission path rather than the pipe guard.
+    # Close PATH in the child so an external encoder cannot satisfy the test.
+    emit_values() {
+      path=()
+      LC_ALL=C.UTF-8
+      TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
+      setopt ksh_arrays err_exit
+      wezterm_set_user_var empty ''
+      wezterm_set_user_var one f
+      wezterm_set_user_var two fo
+      wezterm_set_user_var three foo
+      wezterm_set_user_var bytes $'\x00\xff\x5c\x5e\n\xc3\xa9'
+      print -rn -- 'END-OF-OSC'
+    }
+
+    capture_values() {
+      capture_osc emit_values
+    }
+
+    It 'emits exact base64 for arbitrary bytes without external commands'
+      When call capture_values
+      The output should equal $'\e]1337;SetUserVar=empty=\a\e]1337;SetUserVar=one=Zg==\a\e]1337;SetUserVar=two=Zm8=\a\e]1337;SetUserVar=three=Zm9v\a\e]1337;SetUserVar=bytes=AP9cXgrDqQ==\a'
+    End
+
+    emit_large_value() {
+      TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
+      local value=${(l:300::a:)}
+      wezterm_set_user_var large "$value"
+      print -rn -- 'END-OF-OSC'
+    }
+
+    capture_large_value() {
+      capture_osc emit_large_value
+    }
+
+    It 'encodes larger public values without wrapping the output'
+      run_it() {
+        local expected=$'\e]1337;SetUserVar=large='${(l:400::YWFh:)}$'\a'
+        [[ "$(capture_large_value)" == "$expected" ]]
+      }
+      When call run_it
+      The status should be success
+    End
+
+    emit_large_via_external_encoder() {
+      TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
+      base64() { :; }
+      tr() { print -rn -- STREAM; }
+      local value=${(l:257::a:)}
+      wezterm_set_user_var large "$value"
+      print -rn -- 'END-OF-OSC'
+    }
+
+    It 'uses the streaming encoder above the size limit'
+      run_it() { capture_osc emit_large_via_external_encoder; }
+      When call run_it
+      The output should equal $'\e]1337;SetUserVar=large=STREAM\a'
+    End
+
+    emit_other_terminal() {
+      TERM_PROGRAM=xterm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
+      wezterm_set_user_var k v
+      print -rn -- "status=$? END-OF-OSC"
+    }
+
+    capture_other_terminal() {
+      local output
+      output=$(capture_osc emit_other_terminal) || return
+      print -rn -- "${output% }"
+    }
+
+    It 'declines successfully in another terminal even when stdout is a terminal'
+      When call capture_other_terminal
+      The output should equal 'status=0'
+    End
+
     # OSC 1337 SetUserVar is an iTerm2/WezTerm extension. Emitting it blind
     # sprays base64 into terminals that do not understand it.
     It 'emits nothing in a non-WezTerm terminal'
