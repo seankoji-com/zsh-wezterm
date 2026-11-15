@@ -77,6 +77,13 @@ wezterm_set_user_var() {
   # Keep the work in this shell: the prompt hooks call this for every command.
   setopt no_multibyte
   local value=$2 encoded='' alphabet=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/
+  # Indexing zsh strings repeatedly is quadratic. Use the original streaming
+  # encoder for larger public values; prompt and repository names stay in-shell.
+  if (( ${#value} > 256 )); then
+    encoded=$(printf '%s' "$value" | base64 | tr -d '\n')
+    printf '\033]1337;SetUserVar=%s=%s\007' "$1" "$encoded"
+    return
+  fi
   local -i i byte bits=0 count=0 index
   for (( i = 1; i <= ${#value}; i++ )); do
     printf -v byte '%d' "'$value[i]"

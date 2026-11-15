@@ -72,7 +72,9 @@ Describe 'zsh-wezterm.plugin.zsh'
     # Close PATH in the child so an external encoder cannot satisfy the test.
     emit_values() {
       path=()
+      LC_ALL=C.UTF-8
       TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
+      setopt ksh_arrays err_exit
       wezterm_set_user_var empty ''
       wezterm_set_user_var one f
       wezterm_set_user_var two fo
@@ -93,6 +95,31 @@ Describe 'zsh-wezterm.plugin.zsh'
     It 'emits exact base64 for arbitrary bytes without external commands'
       When call capture_values
       The output should equal $'\e]1337;SetUserVar=empty=\a\e]1337;SetUserVar=one=Zg==\a\e]1337;SetUserVar=two=Zm8=\a\e]1337;SetUserVar=three=Zm9v\a\e]1337;SetUserVar=bytes=AP9cXgrDqQ==\a'
+    End
+
+    emit_large_value() {
+      TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
+      local value=${(l:300::a:)}
+      wezterm_set_user_var large "$value"
+      print -rn -- 'END-OF-OSC'
+    }
+
+    capture_large_value() {
+      zmodload zsh/zpty
+      local output
+      zpty osc emit_large_value
+      zpty -r osc output '*END-OF-OSC*'
+      zpty -d osc
+      print -rn -- "${output%END-OF-OSC*}"
+    }
+
+    It 'encodes larger public values without wrapping the output'
+      run_it() {
+        local expected=$'\e]1337;SetUserVar=large='${(l:400::YWFh:)}$'\a'
+        [[ "$(capture_large_value)" == "$expected" ]]
+      }
+      When call run_it
+      The status should be success
     End
 
     emit_other_terminal() {
