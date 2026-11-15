@@ -84,6 +84,7 @@ Describe 'zsh-wezterm.plugin.zsh'
           elif (( $? == 2 )); then
             zpty -d osc
             print -u2 -r -- 'OSC child exited before marker'
+            [[ -n $output ]] && print -u2 -r -- "$output"
             return 1
           fi
           if [[ $output == *END-OF-OSC* ]]; then
@@ -121,7 +122,7 @@ Describe 'zsh-wezterm.plugin.zsh'
       capture_osc emit_values
     }
 
-    emit_without_marker() { print -rn -- 'partial'; }
+    emit_without_marker() { command zsh_wezterm_missing_command_for_test; }
     emit_without_exiting() { sleep 10; }
 
     It 'fails promptly when the child exits before the marker'
@@ -133,7 +134,8 @@ Describe 'zsh-wezterm.plugin.zsh'
       }
       When call run_it
       The status should be success
-      The stderr should equal 'OSC child exited before marker'
+      The stderr should include 'OSC child exited before marker'
+      The stderr should include 'zsh_wezterm_missing_command_for_test'
     End
 
     It 'times out when the child remains running without the marker'
