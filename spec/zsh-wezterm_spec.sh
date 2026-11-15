@@ -149,6 +149,24 @@ Describe 'zsh-wezterm.plugin.zsh'
       The output should equal $'\e]1337;SetUserVar=empty=\a\e]1337;SetUserVar=one=Zg==\a\e]1337;SetUserVar=two=Zm8=\a\e]1337;SetUserVar=three=Zm9v\a\e]1337;SetUserVar=bytes=AP9cXgrDqQ==\a'
     End
 
+    emit_cutoff_value() {
+      path=()
+      TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
+      setopt err_exit
+      local value=${(l:256::a:)}
+      wezterm_set_user_var cutoff "$value"
+      print -rn -- 'END-OF-OSC'
+    }
+
+    It 'encodes exactly 256 bytes without external commands'
+      run_it() {
+        local expected=$'\e]1337;SetUserVar=cutoff='${(l:340::YWFh:)}'YQ=='$'\a'
+        [[ "$(capture_osc emit_cutoff_value)" == "$expected" ]]
+      }
+      When call run_it
+      The status should be success
+    End
+
     emit_large_value() {
       TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
       local value=${(l:300::a:)}
