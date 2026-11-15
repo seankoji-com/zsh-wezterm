@@ -72,8 +72,32 @@ wezterm_urlencode() {
 wezterm_set_user_var() {
   [[ -t 1 ]] || return 0
   wezterm_is_wezterm || return 0
+  emulate -L zsh
+  # Encode bytes, including embedded NULs, independently of the caller's locale.
+  # Keep the work in this shell: the prompt hooks call this for every command.
+  setopt no_multibyte
+  local value=$2 encoded='' alphabet=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/
+  local -i i byte bits=0 count=0 index
+  for (( i = 1; i <= ${#value}; i++ )); do
+    printf -v byte '%d' "'$value[i]"
+    bits=$(( (bits << 8) | byte ))
+    (( count += 8 ))
+    while (( count >= 6 )); do
+      (( count -= 6 ))
+      index=$(( ((bits >> count) & 63) + 1 ))
+      encoded+=$alphabet[index]
+    done
+    bits=$(( bits & ((1 << count) - 1) ))
+  done
+  if (( count )); then
+    index=$(( (bits << (6 - count)) + 1 ))
+    encoded+=$alphabet[index]
+  fi
+  while (( ${#encoded} % 4 )); do
+    encoded+='='
+  done
   printf '\033]1337;SetUserVar=%s=%s\007' \
-    "$1" "$(printf '%s' "$2" | base64 | tr -d '\n')"
+    "$1" "$encoded"
 }
 
 # The repository name for the current directory, empty outside a repo.

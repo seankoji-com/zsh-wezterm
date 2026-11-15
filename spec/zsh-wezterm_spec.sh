@@ -68,6 +68,53 @@ Describe 'zsh-wezterm.plugin.zsh'
   End
 
   Describe 'wezterm_set_user_var'
+    # A pseudo-terminal exercises the emission path rather than the pipe guard.
+    # Close PATH in the child so an external encoder cannot satisfy the test.
+    emit_values() {
+      path=()
+      TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
+      wezterm_set_user_var empty ''
+      wezterm_set_user_var one f
+      wezterm_set_user_var two fo
+      wezterm_set_user_var three foo
+      wezterm_set_user_var bytes $'\x00\xff\x5c\x5e\n\xc3\xa9'
+      print -rn -- 'END-OF-OSC'
+    }
+
+    capture_values() {
+      zmodload zsh/zpty
+      local output
+      zpty osc emit_values
+      zpty -r osc output '*END-OF-OSC*'
+      zpty -d osc
+      print -rn -- "${output%END-OF-OSC*}"
+    }
+
+    It 'emits exact base64 for arbitrary bytes without external commands'
+      When call capture_values
+      The output should equal $'\e]1337;SetUserVar=empty=\a\e]1337;SetUserVar=one=Zg==\a\e]1337;SetUserVar=two=Zm8=\a\e]1337;SetUserVar=three=Zm9v\a\e]1337;SetUserVar=bytes=AP9cXgrDqQ==\a'
+    End
+
+    emit_other_terminal() {
+      TERM_PROGRAM=xterm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
+      wezterm_set_user_var k v
+      print -rn -- "status=$? END-OF-OSC"
+    }
+
+    capture_other_terminal() {
+      zmodload zsh/zpty
+      local output
+      zpty osc emit_other_terminal
+      zpty -r osc output '*END-OF-OSC*'
+      zpty -d osc
+      print -rn -- "${output% END-OF-OSC*}"
+    }
+
+    It 'declines successfully in another terminal even when stdout is a terminal'
+      When call capture_other_terminal
+      The output should equal 'status=0'
+    End
+
     # OSC 1337 SetUserVar is an iTerm2/WezTerm extension. Emitting it blind
     # sprays base64 into terminals that do not understand it.
     It 'emits nothing in a non-WezTerm terminal'
