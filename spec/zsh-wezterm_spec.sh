@@ -84,7 +84,9 @@ Describe 'zsh-wezterm.plugin.zsh'
           elif (( $? == 2 )); then
             zpty -d osc
             print -u2 -r -- 'OSC child exited before marker'
-            [[ -n $output ]] && print -u2 -r -- "$output"
+            # Quote child output before it reaches a terminal, including a
+            # partial OSC. Keep printable diagnostics readable.
+            [[ -n $output ]] && { local LC_ALL=C; print -u2 -r -- "${(qqqq)output}"; }
             return 1
           fi
           if [[ $output == *END-OF-OSC* ]]; then
@@ -122,7 +124,13 @@ Describe 'zsh-wezterm.plugin.zsh'
       capture_osc emit_values
     }
 
+    # Compare a reversible byte representation so ShellSpec never prints OSC
+    # controls in an assertion failure. pipefail preserves capture errors.
+    osc_hex() { LC_ALL=C od -An -v -tx1; }
+
     emit_without_marker() { command zsh_wezterm_missing_command_for_test; }
+    emit_complete_osc_without_marker() { print -rn -- $'child output: \e]1337;SetUserVar=x=eA==\a'; }
+    emit_partial_osc_without_marker() { print -rn -- $'child output: \e]1337;SetUserVar=x='; }
     emit_without_exiting() { sleep 10; }
 
     It 'fails promptly when the child exits before the marker'
@@ -138,6 +146,30 @@ Describe 'zsh-wezterm.plugin.zsh'
       The stderr should include 'zsh_wezterm_missing_command_for_test'
     End
 
+    It 'escapes a complete OSC in early-exit diagnostics'
+      run_it() {
+        local diagnostic
+        diagnostic=$(capture_osc emit_complete_osc_without_marker 2>&1) && return 1
+        [[ $diagnostic == *'OSC child exited before marker'* &&
+           $diagnostic == *'child output: '* && $diagnostic == *'SetUserVar=x=eA=='* &&
+           $diagnostic != *$'\e'* && $diagnostic != *$'\a'* ]]
+      }
+      When call run_it
+      The status should be success
+    End
+
+    It 'escapes a partial OSC in early-exit diagnostics'
+      run_it() {
+        local diagnostic
+        diagnostic=$(capture_osc emit_partial_osc_without_marker 2>&1) && return 1
+        [[ $diagnostic == *'OSC child exited before marker'* &&
+           $diagnostic == *'child output: '* && $diagnostic == *'SetUserVar=x='* &&
+           $diagnostic != *$'\e'* ]]
+      }
+      When call run_it
+      The status should be success
+    End
+
     It 'times out when the child remains running without the marker'
       run_it() {
         zmodload zsh/datetime
@@ -151,8 +183,10 @@ Describe 'zsh-wezterm.plugin.zsh'
     End
 
     It 'emits exact base64 for arbitrary bytes without external commands'
-      When call capture_values
-      The output should equal $'\e]1337;SetUserVar=empty=\a\e]1337;SetUserVar=one=Zg==\a\e]1337;SetUserVar=two=Zm8=\a\e]1337;SetUserVar=three=Zm9v\a\e]1337;SetUserVar=bytes=AP9cXgrDqQ==\a'
+      run_it() { setopt localoptions pipefail; capture_values | osc_hex; }
+      When call run_it
+      The status should be success
+      The output should equal "$(print -rn -- $'\e]1337;SetUserVar=empty=\a\e]1337;SetUserVar=one=Zg==\a\e]1337;SetUserVar=two=Zm8=\a\e]1337;SetUserVar=three=Zm9v\a\e]1337;SetUserVar=bytes=AP9cXgrDqQ==\a' | osc_hex)"
     End
 
     emit_cutoff_value() {
@@ -165,8 +199,10 @@ Describe 'zsh-wezterm.plugin.zsh'
     }
 
     It 'encodes exactly 256 bytes without external commands'
-      When call capture_osc emit_cutoff_value
-      The output should equal $'\e]1337;SetUserVar=cutoff='${(l:340::YWFh:)}'YQ=='$'\a'
+      run_it() { setopt localoptions pipefail; capture_osc emit_cutoff_value | osc_hex; }
+      When call run_it
+      The status should be success
+      The output should equal "$(print -rn -- $'\e]1337;SetUserVar=cutoff='${(l:340::YWFh:)}'YQ=='$'\a' | osc_hex)"
     End
 
     emit_large_value() {
@@ -199,9 +235,10 @@ Describe 'zsh-wezterm.plugin.zsh'
     }
 
     It 'uses the streaming encoder above the size limit'
-      run_it() { capture_osc emit_large_via_external_encoder; }
+      run_it() { setopt localoptions pipefail; capture_osc emit_large_via_external_encoder | osc_hex; }
       When call run_it
-      The output should equal $'\e]1337;SetUserVar=large=STREAM\a'
+      The status should be success
+      The output should equal "$(print -rn -- $'\e]1337;SetUserVar=large=STREAM\a' | osc_hex)"
     End
 
     emit_other_terminal() {
