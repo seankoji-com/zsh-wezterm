@@ -181,12 +181,9 @@ Describe 'zsh-wezterm.plugin.zsh'
     }
 
     It 'encodes larger public values without wrapping the output'
-      run_it() {
-        local expected=$'\e]1337;SetUserVar=large='${(l:400::YWFh:)}$'\a'
-        [[ "$(capture_large_value)" == "$expected" ]]
-      }
-      When call run_it
-      The status should be success
+      expected=$'\e]1337;SetUserVar=large='${(l:400::YWFh:)}$'\a'
+      When call capture_large_value
+      The output should equal "$expected"
     End
 
     emit_large_via_external_encoder() {
