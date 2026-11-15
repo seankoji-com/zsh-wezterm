@@ -68,6 +68,30 @@ Describe 'zsh-wezterm.plugin.zsh'
   End
 
   Describe 'wezterm_set_user_var'
+    # Read without a pattern so a broken emitter cannot block the test forever.
+    capture_osc() {
+      zmodload zsh/zpty
+      zmodload zsh/zselect
+      zmodload zsh/datetime
+      local output='' chunk fd
+      local -F deadline=$(( EPOCHREALTIME + 5 ))
+      zpty -b osc "$1"
+      fd=$REPLY
+      while (( EPOCHREALTIME < deadline )); do
+        if zselect -t 10 -r "$fd" && zpty -r -t osc chunk; then
+          output+=$chunk
+          if [[ $output == *END-OF-OSC* ]]; then
+            zpty -d osc
+            print -rn -- "${output%END-OF-OSC*}"
+            return 0
+          fi
+        fi
+      done
+      zpty -d osc
+      print -u2 -r -- 'timed out waiting for OSC output'
+      return 1
+    }
+
     # A pseudo-terminal exercises the emission path rather than the pipe guard.
     # Close PATH in the child so an external encoder cannot satisfy the test.
     emit_values() {
@@ -84,12 +108,7 @@ Describe 'zsh-wezterm.plugin.zsh'
     }
 
     capture_values() {
-      zmodload zsh/zpty
-      local output
-      zpty osc emit_values
-      zpty -r osc output '*END-OF-OSC*'
-      zpty -d osc
-      print -rn -- "${output%END-OF-OSC*}"
+      capture_osc emit_values
     }
 
     It 'emits exact base64 for arbitrary bytes without external commands'
@@ -105,12 +124,7 @@ Describe 'zsh-wezterm.plugin.zsh'
     }
 
     capture_large_value() {
-      zmodload zsh/zpty
-      local output
-      zpty osc emit_large_value
-      zpty -r osc output '*END-OF-OSC*'
-      zpty -d osc
-      print -rn -- "${output%END-OF-OSC*}"
+      capture_osc emit_large_value
     }
 
     It 'encodes larger public values without wrapping the output'
@@ -122,6 +136,21 @@ Describe 'zsh-wezterm.plugin.zsh'
       The status should be success
     End
 
+    emit_large_via_external_encoder() {
+      TERM_PROGRAM=WezTerm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
+      base64() { :; }
+      tr() { print -rn -- STREAM; }
+      local value=${(l:257::a:)}
+      wezterm_set_user_var large "$value"
+      print -rn -- 'END-OF-OSC'
+    }
+
+    It 'uses the streaming encoder above the size limit'
+      run_it() { capture_osc emit_large_via_external_encoder; }
+      When call run_it
+      The output should equal $'\e]1337;SetUserVar=large=STREAM\a'
+    End
+
     emit_other_terminal() {
       TERM_PROGRAM=xterm WEZTERM_EXECUTABLE='' WEZTERM_PANE=''
       wezterm_set_user_var k v
@@ -129,12 +158,9 @@ Describe 'zsh-wezterm.plugin.zsh'
     }
 
     capture_other_terminal() {
-      zmodload zsh/zpty
       local output
-      zpty osc emit_other_terminal
-      zpty -r osc output '*END-OF-OSC*'
-      zpty -d osc
-      print -rn -- "${output% END-OF-OSC*}"
+      output=$(capture_osc emit_other_terminal) || return
+      print -rn -- "${output% }"
     }
 
     It 'declines successfully in another terminal even when stdout is a terminal'
