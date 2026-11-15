@@ -177,11 +177,14 @@ Describe 'zsh-wezterm.plugin.zsh'
     }
 
     capture_large_value() {
-      capture_osc emit_large_value
+      local output
+      output=$(capture_osc emit_large_value) || return
+      print -rn -- ${(qqqq)output}
     }
 
     It 'encodes larger public values without wrapping the output'
       expected=$'\e]1337;SetUserVar=large='${(l:400::YWFh:)}$'\a'
+      expected=${(qqqq)expected}
       When call capture_large_value
       The output should equal "$expected"
     End
